@@ -152,10 +152,15 @@ static void Cv4BeginSimFrame(unsigned number)
      * to the fixed-color backdrop. This changes host presentation only. */
     PpuSetWidescreenWindowExpansion(g_ppu, 0x3fu, 0x03u);
     /* Stage 1 has uninitialised tilemap data immediately left of its opening
-     * room. Preserve the original widescreen policy: spend the full margin
-     * on the valid right side there, and use centred 16:9 everywhere else. */
-    if (g_config.widescreen && g_ram[0x0032] == 0x04 && g_ram[0x0086] == 0x00)
-        PpuSetExtraSideSpace(g_ppu, 0, g_ppu->extraLeftRight, 0);
+     * camera lock. Open that margin progressively as the camera moves into
+     * valid room space; after one widescreen margin it is centred normally.
+     * The right margin remains fully visible throughout. */
+    if (g_config.widescreen && g_ram[0x0032] == 0x04 && g_ram[0x0086] == 0x00) {
+        int camera = g_ram[0x001c] | ((int)g_ram[0x001d] << 8);
+        int lock_left = g_ram[0x00a0] | ((int)g_ram[0x00a1] << 8);
+        PpuSetExtraSideSpace(g_ppu, camera - lock_left,
+                            g_ppu->extraLeftRight, 0);
+    }
     Cv4SimonSpritesheetBeginFrame(g_ppu, g_ram);
 }
 

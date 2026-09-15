@@ -166,22 +166,8 @@ static void Cv4BeginSimFrame(unsigned number)
         int camera = g_ram[0x001c] | ((int)g_ram[0x001d] << 8);
         int lock_left = g_ram[0x00a0] | ((int)g_ram[0x00a1] << 8);
         int lock_right = g_ram[0x00a2] | ((int)g_ram[0x00a3] << 8);
-        int left = camera - lock_left;
-        int right = lock_right - camera;
-
-        /* The opening rooms stream a 32x32 metatile ring for exactly the
-         * retail viewport. Columns on EITHER side can therefore be stale:
-         * ahead of the camera they are not loaded yet, while behind it the
-         * ring has already wrapped and contains another part of the room.
-         * Exposing either one looks like a copied framebuffer. Keep the fixed
-         * centering budget but publish no live side columns, making the host
-         * clear both margins to black until this title's block streamer is
-         * genuinely widened. $86 is SCIV's current-level word. */
-        if ((g_ram[0x0086] | ((int)g_ram[0x0087] << 8)) <= 0x0f) {
-            left = 0;
-            right = 0;
-        }
-        PpuSetExtraSideSpace(g_ppu, left, right, 0);
+        PpuSetExtraSideSpace(g_ppu, camera - lock_left,
+                            lock_right - camera, 0);
     }
     Cv4SimonSpritesheetBeginFrame(g_ppu, g_ram);
 }

@@ -3,9 +3,14 @@
 A native recompilation of **Super Castlevania IV** (USA), built on
 [snesrecomp](https://github.com/RetroPortingToolKit/snesrecomp).
 
-_Add a short description here._
+This repository pins a project-specific framework branch in
+[`RasmusKarlsson/snesrecomp-sciv`](https://github.com/RasmusKarlsson/snesrecomp-sciv)
+for the native widescreen and Dear ImGui host integration that has not yet
+been upstreamed.
 
-
+The original 65816 program runs through a hybrid of generated native C and
+the framework's correctness interpreter, with native desktop video, audio,
+input, saves, save states, rewind and optional 16:9 rendering.
 
 > **You must legally own a copy of the game.** No ROM data is distributed with
 > this project, in the repository or in any release. The recompiled C is
@@ -13,10 +18,32 @@ _Add a short description here._
 
 ## Status
 
-Scaffolded on 2026-09-14 — **not yet a working port.** The layout, build,
-regeneration pipeline, CI, and packaging are wired up; the game does not run
-until the host work in `src/game_rtl.c` is done. See
-[Porting from here](#porting-from-here).
+Playable from a clean boot. Reset/NMI scheduling, including SCIV's nested NMI
+semaphore, is supported and the generated native execution path is enabled by
+default. The 16:9 path renders real 342x224 PPU scene data while retaining the
+authored 256-pixel HUD safe area. Full-game widescreen validation—especially
+Mode 7 rooms, bosses and scripted camera boundaries—is ongoing.
+
+## Desktop features and shortcuts
+
+| Feature | Default shortcut |
+|---|---|
+| Quick-load slot 1 | `F1` |
+| Quick-save slot 1 | `Shift+F1` |
+| Load slots 1–10 | `F1`–`F10` |
+| Save slots 1–10 | `Shift+F1`–`Shift+F10` |
+| Save-state browser | `F11` |
+| Rewind browser | `F12` |
+| Fast-forward | `Tab` |
+| Pause | `P` |
+| Pause/settings menu | `Escape` |
+| Fullscreen | `Alt+Enter` |
+
+The launcher exposes widescreen, SNES display aspect, renderer, shader,
+frame-blending, audio, controls and run-ahead settings. Shortcuts can be
+changed in `config.ini`; controller bindings live in `keybinds.ini`.
+During play, `Escape` opens a controller-friendly menu for resuming, changing
+the view mode or volume, quick-saving/loading slot 1, and resetting the game.
 
 ## ROM identity
 

@@ -42,6 +42,7 @@
 #include "game_rtl.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "common_cpu_infra.h"
@@ -66,6 +67,54 @@ extern Ppu *g_ppu;
 
 /* 0 until the first frame has booted from the reset vector. */
 static uint32_t g_resume_pc;
+static uint32_t g_frame_number;
+
+static int game_diag_enabled(void)
+{
+    static int enabled = -1;
+    if (enabled < 0) {
+        const char *value = getenv("SNESRECOMP_CV4_DIAG");
+        enabled = value && value[0] && value[0] != '0';
+    }
+    return enabled;
+}
+
+typedef struct GameCpuSave {
+    uint16_t A, X, Y, S, D;
+    uint8_t DB, PB, P;
+    uint8_t host_return_valid;
+    uint8_t m_flag, x_flag, emulation;
+    uint8_t flag_n, flag_v, flag_z, flag_c, flag_i, flag_d;
+    CpuTailcallContextSave tailcall_context;
+} GameCpuSave;
+
+static void game_save_cpu(GameCpuSave *save, const CpuState *cpu)
+{
+    save->A = cpu->A; save->X = cpu->X; save->Y = cpu->Y;
+    save->S = cpu->S; save->D = cpu->D;
+    save->DB = cpu->DB; save->PB = cpu->PB; save->P = cpu->P;
+    save->host_return_valid = cpu->host_return_valid;
+    save->m_flag = cpu->m_flag; save->x_flag = cpu->x_flag;
+    save->emulation = cpu->emulation;
+    save->flag_n = cpu->_flag_N; save->flag_v = cpu->_flag_V;
+    save->flag_z = cpu->_flag_Z; save->flag_c = cpu->_flag_C;
+    save->flag_i = cpu->_flag_I; save->flag_d = cpu->_flag_D;
+    cpu_tailcall_context_save(&save->tailcall_context);
+}
+
+static void game_restore_cpu(CpuState *cpu, const GameCpuSave *save)
+{
+    cpu->A = save->A; cpu->X = save->X; cpu->Y = save->Y;
+    cpu->S = save->S; cpu->D = save->D;
+    cpu->DB = save->DB; cpu->PB = save->PB; cpu->P = save->P;
+    cpu->host_return_valid = save->host_return_valid;
+    cpu->m_flag = save->m_flag; cpu->x_flag = save->x_flag;
+    cpu->emulation = save->emulation;
+    cpu->_flag_N = save->flag_n; cpu->_flag_V = save->flag_v;
+    cpu->_flag_Z = save->flag_z; cpu->_flag_C = save->flag_c;
+    cpu->_flag_I = save->flag_i; cpu->_flag_D = save->flag_d;
+    cpu_tailcall_context_restore(&save->tailcall_context);
+}
 
 static uint32_t read_vector(uint32_t addr)
 {
@@ -85,6 +134,8 @@ static uint32_t irq_vector(void)   { return read_vector(0x00FFEEu); }
  * terminal RTI returns into that instruction stream. */
 static void game_run_interrupt(uint32_t vector, uint64_t frame_end)
 {
+    GameCpuSave interrupted;
+    game_save_cpu(&interrupted, &g_cpu);
     cpu_push_interrupt_frame_at(&g_cpu, g_resume_pc);
     interp_bridge_set_master_deadline(frame_end);
     (void)interp_bridge_run_interrupt(&g_cpu, vector);
@@ -92,11 +143,11 @@ static void game_run_interrupt(uint32_t vector, uint64_t frame_end)
      * prologue afterwards, which turns every compiled body into an immediate
      * yield-unwind. */
     interp_bridge_set_master_deadline(0);
-    {
-        uint32_t resume = interp_bridge_lle_resume_pc();
-        if (resume)
-            g_resume_pc = resume;
-    }
+    /* The handler communicates through RAM and hardware registers. Its
+     * architectural register file belongs to the interrupted main line. This
+     * restore is also essential when a long handler reaches the bridge cap:
+     * retaining its partial stack would nest another interrupt next frame. */
+    game_restore_cpu(&g_cpu, &interrupted);
 }
 
 void GameRunOneFrame(void)
@@ -108,14 +159,38 @@ void GameRunOneFrame(void)
     if (booting)
         g_resume_pc = reset_vector();
 
+    if (game_diag_enabled() && (g_frame_number < 32 || !(g_frame_number % 60)))
+        fprintf(stderr,
+                "[cv4_frame] n=%u boot=%d resume=$%06X nmi=%d irq=%d "
+                "S=$%04X P=$%02X cycles=%llu\n",
+                (unsigned)g_frame_number, booting, (unsigned)g_resume_pc,
+                g_snes->nmiEnabled, g_snes->inIrq, (unsigned)g_cpu.S,
+                (unsigned)g_cpu.P, (unsigned long long)g_cpu.master_cycles);
+
     /* Vblank edge. NMITIMEN gates it: delivering before the guest has enabled
      * NMI would land an interrupt frame in the middle of its SEI boot
      * sequence. Nothing is delivered on the very first frame either — reset
      * has not run yet, so there is no instruction stream to interrupt. */
     if (!booting && g_snes->nmiEnabled) {
         g_snes->inNmi = true;
-        game_run_interrupt(nmi_vector(), frame_end);
+        /* Castlevania deliberately suspends one NMI at $00:8551 while it
+         * waits for the following frame's nested NMI to clear $003C. Run the
+         * handler through the resumable whole-program bridge so its real
+         * interrupt frame remains on the guest stack at that wait. A later
+         * RTI naturally continues the older handler and eventually the main
+         * line; treating NMI as an atomic host call deadlocks here. */
+        cpu_push_interrupt_frame_at(&g_cpu, g_resume_pc);
+        interp_bridge_set_master_deadline(frame_end);
+        interp_bridge_run_until_quiescent(&g_cpu, nmi_vector());
+        interp_bridge_set_master_deadline(0);
+        {
+            uint32_t resume = interp_bridge_lle_resume_pc();
+            if (resume)
+                g_resume_pc = resume;
+        }
         g_snes->inNmi = false;
+        ++g_frame_number;
+        return;
     }
 
     /* Run the guest until it parks on a read-only poll (its vblank wait) or
@@ -126,7 +201,14 @@ void GameRunOneFrame(void)
     for (slice = 0; slice < GAME_MAX_SLICES_PER_FRAME; slice++) {
         if (g_cpu.master_cycles >= frame_end)
             break;
-        interp_bridge_set_master_deadline(frame_end);
+        /* Castlevania performs substantial WRAM decompression before it
+         * enables NMI. Give that reset-only path a larger, still bounded
+         * budget; running it without a deadline can wedge in an APU handshake.
+         * Once NMI is enabled the normal frame deadline owns pacing. */
+        interp_bridge_set_master_deadline(
+            g_snes->nmiEnabled
+                ? frame_end
+                : frame_end + 15ull * GAME_MASTER_CYCLES_PER_FRAME);
         interp_bridge_run_until_quiescent(&g_cpu, g_resume_pc);
         interp_bridge_set_master_deadline(0);
         {
@@ -146,6 +228,7 @@ void GameRunOneFrame(void)
         if (interp_bridge_lle_took_wai())
             break;
     }
+    ++g_frame_number;
 }
 
 void GameDrawPpuFrame(void)
@@ -175,14 +258,8 @@ void GameDrawPpuFrame(void)
             SimpleHdma_DoLine(&hdma_chans[ch]);
         if (line == trigger) {
             g_snes->inIrq = true;
-            cpu_push_interrupt_frame_at(&g_cpu, g_resume_pc);
-            (void)interp_bridge_run_interrupt(&g_cpu, irq_vector());
+            game_run_interrupt(irq_vector(), 0);
             g_snes->inIrq = false;
-            {
-                uint32_t resume = interp_bridge_lle_resume_pc();
-                if (resume)
-                    g_resume_pc = resume;
-            }
             trigger = g_snes->vIrqEnabled ? (int)g_snes->vTimer : -1;
         }
         ppu_runLine(g_ppu, line);
@@ -204,4 +281,5 @@ void GameSessionReset(void)
      * been fine" is the usual desync culprit, because single-player never
      * re-enters the boot path twice in one process. */
     g_resume_pc = 0;
+    g_frame_number = 0;
 }

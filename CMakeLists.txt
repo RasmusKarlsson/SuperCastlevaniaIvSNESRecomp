@@ -34,6 +34,11 @@ endif()
 # Must precede the include: runner.cmake reads it to add the loader sources.
 set(SNESRECOMP_ENABLE_MODS ON CACHE BOOL
     "Mod package loader + trusted plugins (required for every title)" FORCE)
+# This port's playable path currently mixes generated native blocks with the
+# interpreter floor.  Keep that optimized hybrid enabled on clean builds; it
+# remains runtime-overridable for diagnostics.
+set(SNESRECOMP_EXECUTION_DEFAULT "on" CACHE STRING
+    "Default execution policy: off|on|force|verify|auto" FORCE)
 include(${SNESRECOMP_ROOT}/runner/runner.cmake)
 
 add_executable(SuperCastlevaniaIvSNESRecomp
@@ -127,10 +132,13 @@ recomp_target_launcher_ui(SuperCastlevaniaIvSNESRecomp CONSOLE snes
 # src/main.c). recomp-ui/src is on the include path because the host speaks
 # RecompLauncherCGameInfo.
 target_sources(SuperCastlevaniaIvSNESRecomp PRIVATE
-    ${SNESRECOMP_ROOT}/host/snesrecomp_codegen_host.c)
+    ${SNESRECOMP_ROOT}/host/snesrecomp_codegen_host.c
+    src/runtime_settings_imgui.cpp)
 target_include_directories(SuperCastlevaniaIvSNESRecomp PRIVATE
     ${SNESRECOMP_ROOT}/host
     ${RECOMP_UI_ROOT}/src)
+target_compile_definitions(SuperCastlevaniaIvSNESRecomp PRIVATE
+    SNESRECOMP_IMGUI_ESCAPE_SETTINGS=1)
 
 # Netplay is not built into this target.
 # No multitap: two seats, one controller per port.

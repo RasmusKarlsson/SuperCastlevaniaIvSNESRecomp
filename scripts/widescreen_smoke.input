@@ -1,0 +1,12 @@
+# From a clean boot, advance through the title/menu far enough to exercise a
+# scrolling gameplay field. Timing is deliberately generous for CI machines.
+wait 240
+press start 2
+wait 120
+press start 2
+wait 240
+press start 2
+wait 240
+press start 2
+wait 240
+press right 180

@@ -169,34 +169,17 @@ static void Cv4BeginSimFrame(unsigned number)
         int left = camera - lock_left;
         int right = lock_right - camera;
 
-        /* Stage 1-1 streams its block/metatile ring exactly at the retail
-         * leading viewport edge. Event/object look-ahead can safely be wider,
-         * but BG1 columns ahead of the camera are not resident yet: exposing
-         * them produces the detached blocks and purple void seen at the first
-         * cliff. Keep only the already-streamed trailing margin in this room.
-         * The centering budget is unchanged, so the unavailable leading side
-         * is cleared to black by the host instead of showing stale tiles.
-         *
-         * $86 is SCIV's current-level word; the opening-stage room IDs occupy
-         * the first range. Camera delta supplies direction and is retained
-         * while Simon stands still. */
+        /* The opening rooms stream a 32x32 metatile ring for exactly the
+         * retail viewport. Columns on EITHER side can therefore be stale:
+         * ahead of the camera they are not loaded yet, while behind it the
+         * ring has already wrapped and contains another part of the room.
+         * Exposing either one looks like a copied framebuffer. Keep the fixed
+         * centering budget but publish no live side columns, making the host
+         * clear both margins to black until this title's block streamer is
+         * genuinely widened. $86 is SCIV's current-level word. */
         if ((g_ram[0x0086] | ((int)g_ram[0x0087] << 8)) <= 0x0f) {
-            static int previous_camera;
-            static int scroll_direction = 1;
-            static int initialized;
-            if (!initialized) {
-                previous_camera = camera;
-                initialized = 1;
-            } else if (camera > previous_camera) {
-                scroll_direction = 1;
-            } else if (camera < previous_camera) {
-                scroll_direction = -1;
-            }
-            previous_camera = camera;
-            if (scroll_direction > 0)
-                right = 0;
-            else
-                left = 0;
+            left = 0;
+            right = 0;
         }
         PpuSetExtraSideSpace(g_ppu, left, right, 0);
     }

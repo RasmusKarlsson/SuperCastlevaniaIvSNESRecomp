@@ -29,5 +29,9 @@
 /build/*/simon_spritesheet.png
 /simon_spritesheet.v2
 /build/*/simon_spritesheet.v2
+/simon_full_frames.png
+/build/*/simon_full_frames.png
+/simon_full_frames.reference.png
+/build/*/simon_full_frames.reference.png
 
 .DS_Store

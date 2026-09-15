@@ -166,8 +166,39 @@ static void Cv4BeginSimFrame(unsigned number)
         int camera = g_ram[0x001c] | ((int)g_ram[0x001d] << 8);
         int lock_left = g_ram[0x00a0] | ((int)g_ram[0x00a1] << 8);
         int lock_right = g_ram[0x00a2] | ((int)g_ram[0x00a3] << 8);
-        PpuSetExtraSideSpace(g_ppu, camera - lock_left,
-                            lock_right - camera, 0);
+        int left = camera - lock_left;
+        int right = lock_right - camera;
+
+        /* Stage 1-1 streams its block/metatile ring exactly at the retail
+         * leading viewport edge. Event/object look-ahead can safely be wider,
+         * but BG1 columns ahead of the camera are not resident yet: exposing
+         * them produces the detached blocks and purple void seen at the first
+         * cliff. Keep only the already-streamed trailing margin in this room.
+         * The centering budget is unchanged, so the unavailable leading side
+         * is cleared to black by the host instead of showing stale tiles.
+         *
+         * $86 is SCIV's current-level word; the opening-stage room IDs occupy
+         * the first range. Camera delta supplies direction and is retained
+         * while Simon stands still. */
+        if ((g_ram[0x0086] | ((int)g_ram[0x0087] << 8)) <= 0x0f) {
+            static int previous_camera;
+            static int scroll_direction = 1;
+            static int initialized;
+            if (!initialized) {
+                previous_camera = camera;
+                initialized = 1;
+            } else if (camera > previous_camera) {
+                scroll_direction = 1;
+            } else if (camera < previous_camera) {
+                scroll_direction = -1;
+            }
+            previous_camera = camera;
+            if (scroll_direction > 0)
+                right = 0;
+            else
+                left = 0;
+        }
+        PpuSetExtraSideSpace(g_ppu, left, right, 0);
     }
     Cv4SimonSpritesheetBeginFrame(g_ppu, g_ram);
 }

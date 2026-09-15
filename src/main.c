@@ -150,13 +150,24 @@ static void Cv4BeginSimFrame(unsigned number)
      * the widened field too, otherwise valid BG margin pixels are masked back
      * to the fixed-color backdrop. This changes host presentation only. */
     PpuSetWidescreenWindowExpansion(g_ppu, 0x3fu, 0x03u);
-    /* Stage 1 ($7E:0086 == 0 while gameState 4 is active) has uninitialised
-     * tilemap data immediately left of its opening room. Keep the fixed
-     * 43-pixel centering budget, but spend it only on the valid right side:
-     * the native field moves right over a black left pillar and the camera
-     * reveals the useful approach ahead. Other stages retain centred 16:9. */
-    if (g_config.widescreen && g_ram[0x0032] == 0x04 && g_ram[0x0086] == 0x00)
-        PpuSetExtraSideSpace(g_ppu, 0, g_ppu->extraLeftRight, 0);
+    /* Room-aware safety border. SCIV stores the current BG1 camera X at $1C
+     * and its legal minimum/maximum camera positions at $A0/$A2. Only draw
+     * as many side pixels as exist between the camera and those locks. The
+     * fixed centering budget remains 43 pixels per side, so unavailable map
+     * data naturally becomes black instead of wrapped/scrambled tiles.
+     *
+     * During loading the locks are zero; that deliberately yields a centred
+     * 4:3 picture in the 16:9 buffer until the room publishes valid bounds.
+     * At Stage 1's left edge, left_available is zero and all extra view goes
+     * to the right. As the camera moves into the room the left side opens
+     * smoothly, then the right side closes near the far lock. */
+    if (g_config.widescreen && g_ram[0x0032] == 0x04) {
+        int camera = g_ram[0x001c] | ((int)g_ram[0x001d] << 8);
+        int lock_left = g_ram[0x00a0] | ((int)g_ram[0x00a1] << 8);
+        int lock_right = g_ram[0x00a2] | ((int)g_ram[0x00a3] << 8);
+        PpuSetExtraSideSpace(g_ppu, camera - lock_left,
+                            lock_right - camera, 0);
+    }
 }
 
 static const SnesDesktopHostGame kGameHost = {

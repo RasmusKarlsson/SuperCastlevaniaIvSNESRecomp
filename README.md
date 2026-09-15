@@ -45,6 +45,19 @@ changed in `config.ini`; controller bindings live in `keybinds.ini`.
 During play, `Escape` opens a controller-friendly menu for resuming, changing
 the view mode or volume, quick-saving/loading slot 1, and resetting the game.
 
+### Editable Simon sprites
+
+On the first gameplay frame, the port exports Simon's complete decompressed
+4bpp graphics sheet to `simon_spritesheet.png` beside the executable. The PNG
+is 256x448 with transparency and contains every animation tile used by the
+retail animation table. Edit it without resizing it and save as RGBA PNG; the
+running game checks it twice per second and applies changes without a restart.
+
+Pixels are mapped back to Simon's active 16-color SNES palette. Alpha below
+50% becomes transparent; other colors snap to the nearest palette entry. To
+restore the original art, close the game, delete the PNG, and launch again.
+The file is derived from the player's ROM and is intentionally git-ignored.
+
 ## ROM identity
 
 | | |

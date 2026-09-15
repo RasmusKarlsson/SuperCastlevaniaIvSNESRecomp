@@ -34,6 +34,7 @@
 #include "desktop/display_aspect.h"
 #include "guarded_patch.h"
 #include "snes/ppu.h"
+#include "simon_spritesheet.h"
 
 #ifndef __ANDROID__
 #define SDL_MAIN_HANDLED 1
@@ -168,6 +169,7 @@ static void Cv4BeginSimFrame(unsigned number)
         PpuSetExtraSideSpace(g_ppu, camera - lock_left,
                             lock_right - camera, 0);
     }
+    Cv4SimonSpritesheetBeginFrame(g_ppu, g_ram);
 }
 
 static const SnesDesktopHostGame kGameHost = {

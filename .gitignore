@@ -24,4 +24,8 @@
 /config.ini
 /input.ini
 
+# Generated from the player's ROM and intentionally never distributed.
+/simon_spritesheet.png
+/build/*/simon_spritesheet.png
+
 .DS_Store

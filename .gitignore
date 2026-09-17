@@ -32,6 +32,7 @@
 /simon_full_frames.png
 /build/*/simon_full_frames.png
 /simon_full_frames.reference.png
+/characters/
 /build/*/simon_full_frames.reference.png
 
 .DS_Store

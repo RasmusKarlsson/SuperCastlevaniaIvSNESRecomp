@@ -1,0 +1,14 @@
+wait 240
+press start 2
+wait 50
+press down 2
+wait 68
+press start 2
+wait 240
+press start 2
+wait 240
+press start 2
+wait 240
+press right 100
+press b 2
+wait 60

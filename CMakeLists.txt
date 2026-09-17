@@ -135,7 +135,9 @@ recomp_target_launcher_ui(SuperCastlevaniaIvSNESRecomp CONSOLE snes
 target_sources(SuperCastlevaniaIvSNESRecomp PRIVATE
     ${SNESRECOMP_ROOT}/host/snesrecomp_codegen_host.c
     src/runtime_settings_imgui.cpp
-    src/simon_spritesheet.cpp)
+      src/character_pack.cpp
+      src/character_tuning.cpp
+    src/campaign2.c)
 target_include_directories(SuperCastlevaniaIvSNESRecomp PRIVATE
     ${SNESRECOMP_ROOT}/host
     ${RECOMP_UI_ROOT}/src)

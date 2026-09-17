@@ -40,6 +40,8 @@
  */
 
 #include "game_rtl.h"
+#include "campaign2.h"
+#include "character_pack.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -152,6 +154,8 @@ static void game_run_interrupt(uint32_t vector, uint64_t frame_end)
 
 void GameRunOneFrame(void)
 {
+    Cv4CampaignBeforeFrame();
+    Cv4CharacterBeforeFrame();
     const uint64_t frame_end = g_cpu.master_cycles + GAME_MASTER_CYCLES_PER_FRAME;
     const int booting = (g_resume_pc == 0);
     int slice;
@@ -231,6 +235,7 @@ void GameRunOneFrame(void)
     ++g_frame_number;
 }
 
+#include "character_pack.h"
 void GameDrawPpuFrame(void)
 {
     SimpleHdma hdma_chans[8];
@@ -262,8 +267,19 @@ void GameDrawPpuFrame(void)
             g_snes->inIrq = false;
             trigger = g_snes->vIrqEnabled ? (int)g_snes->vTimer : -1;
         }
+        Cv4CampaignRasterLine(line);
         ppu_runLine(g_ppu, line);
     }
+    Cv4CharacterEnd(g_ppu);
+    Cv4CampaignAfterRaster();
+}
+
+/* g_resume_pc and the bridge execution context are not currently serialized
+ * by this port. Explicitly reject speculative rollback: a missing callback
+ * means "no extra state" to the framework, which incorrectly permits it. */
+static size_t GameExecutionStateBound(void)
+{
+    return 0;
 }
 
 const RtlGameInfo kGameInfo = {
@@ -272,6 +288,7 @@ const RtlGameInfo kGameInfo = {
     .run_frame = &GameRunOneFrame,
     .draw_ppu_frame = &GameDrawPpuFrame,
     .save_name_prefix = "save",
+    .exec_state_bound = &GameExecutionStateBound,
 };
 
 void GameSessionReset(void)

@@ -34,7 +34,7 @@
 #include "desktop/display_aspect.h"
 #include "guarded_patch.h"
 #include "snes/ppu.h"
-#include "simon_spritesheet.h"
+#include "character_pack.h"
 
 #ifndef __ANDROID__
 #define SDL_MAIN_HANDLED 1
@@ -105,6 +105,7 @@ static void Cv4InitWidescreenObjectBounds(const uint8_t *rom, size_t size)
 
     if (!rom)
         return;
+    Cv4CharacterInit(rom, (unsigned)size);
     for (unsigned i = 0; i < kCv4WidePatchCount; ++i) {
         if (size < kPatches[i].pc + sizeof(kPatches[i].original))
             continue;
@@ -161,7 +162,7 @@ static void Cv4BeginSimFrame(unsigned number)
         PpuSetExtraSideSpace(g_ppu, camera - lock_left,
                             g_ppu->extraLeftRight, 0);
     }
-    Cv4SimonSpritesheetBeginFrame(g_ppu, g_ram);
+    Cv4CharacterBegin(g_ppu, g_ram);
 }
 
 static const SnesDesktopHostGame kGameHost = {

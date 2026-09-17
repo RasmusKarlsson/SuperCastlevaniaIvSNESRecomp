@@ -1,0 +1,21 @@
+# Test-only placement: attack with body tiles above scanline zero.
+wait 240
+press start 2
+wait 120
+press start 2
+wait 240
+press start 2
+wait 240
+press start 2
+wait 240
+poke 054e 0000
+press b+y 15
+wait 30
+press y 8
+wait 30
+press up+y 8
+wait 30
+press left+y 8
+wait 30
+press y 8
+wait 150

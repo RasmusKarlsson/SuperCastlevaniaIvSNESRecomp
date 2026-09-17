@@ -45,18 +45,84 @@ changed in `config.ini`; controller bindings live in `keybinds.ini`.
 During play, `Escape` opens a controller-friendly menu for resuming, changing
 the view mode or volume, quick-saving/loading slot 1, and resetting the game.
 
-### Editable Simon sprites
+Run-ahead is currently unsupported for this port: its execution continuation
+is not yet included in rollback snapshots. A saved nonzero preference now
+safely falls back to normal execution instead of speculating with incomplete
+state and hanging at startup.
 
-On the first gameplay frame, the port exports Simon's complete decompressed
-4bpp graphics sheet to `simon_spritesheet.png` beside the executable. The PNG
-is 256x448 with transparency and contains every animation tile used by the
-retail animation table. Edit it without resizing it and save as RGBA PNG; the
-running game checks it twice per second and applies changes without a restart.
+### START 2: empty starter campaign
 
-Pixels are mapped back to Simon's active 16-color SNES palette. Alpha below
-50% becomes transparent; other colors snap to the nearest palette entry. To
-restore the original art, close the game, delete the PNG, and launch again.
-The file is derived from the player's ROM and is intentionally git-ignored.
+The title's PLAY SELECT menu now offers **START**, **START 2**, **CONTINUE**
+and **OPTION**. Use Up/Down and the normal Start button to select one.
+START still launches the original game; START 2 loads a separate, single-room
+sandbox after the normal opening sequence. It has a black background, a solid
+block floor, bounded movement, and Simon's existing jumping/attacking and
+character replacement support. There are no enemies, scenery, exits or timer
+deaths. The retail HUD is hidden in this empty room.
+
+This is a starting point for a new campaign, not a finished second adventure
+or a level editor. Room geometry/rendering and the title extension live in
+`src/campaign2.c`; the ROM file is not changed. Reset from Escape to return to
+the title. The campaign tag is included in RAM-based quick saves.
+
+Regression test (requires Pillow): `python tools/test_campaign2.py --rom PATH`.
+It checks both START choices, OPTION, empty-room rendering and jumping/landing.
+
+### Character workshop: editable complete body frames
+
+**Escape > Character workshop > Character gameplay** exposes settings for the
+selected character: walk/crouch speed, jump strength, gravity, air speed and
+steering, maximum fall speed, each whip tier's attack/dangling damage, dagger,
+axe, holy-water and cross damage, whip link counts, and subweapon heart costs.
+Changes take effect when play resumes. Click **Save gameplay** to keep them in
+that character's `character.json`; **Reset to Simon defaults** resets the live
+values (save afterwards to keep the reset). Disabling the pack restores native
+gameplay. Existing manifests without a `gameplay` object use native defaults.
+
+Speeds/strength/gravity use percentages of Simon's original values. Damage uses
+internal attack points, not HUD health bars. Whip length is limited to the
+native 1–7-link range; ring-swing rope length is unchanged. Crouch speed also
+affects the native slow movement used in mud. No PNG edits or ROM-file writes
+are involved. Byte-checked overrides target the runtime cartridge copy.
+
+Regression test: `python tools/test_character_tuning.py --rom PATH` compares
+default, tuned and disabled character profiles in isolated folders.
+
+Play to collect poses, then open **Escape > Character workshop** and click
+**Create character copy**. Edit `characters/custom-1/body.png` under the game's
+working directory (normally beside the executable). Save as RGBA PNG without
+resizing: the sheet is 768 x 3072, with eight 96 x 96 cells per row. Each cell
+is a complete, independent body pose. Changes reload while playing.
+
+The workshop previews poses, mirrors the preview, overlays the original Simon,
+and adjusts each pose's origin. Green marks the engine origin, not the feet;
+gold is a hand-placement guide. **Save anchors** persists these adjustments.
+The whip, attacks, hitboxes and movement still use the original game logic;
+the hand guide does not move the whip. This is a visual character-pack system,
+not a new gameplay-character system.
+
+Walking, jumping, attacking and stairs collect additional poses into
+`characters/simon-template`. Click **Add newly collected poses** to copy only
+missing poses into your character, preserving existing artwork. Back up your
+custom folder before editing. Do not edit the automatically generated template.
+The preview's playback cycles collected poses, not the game's animation timing.
+
+`character.json` maps stable exact pose IDs to cells and anchors. Keep IDs and
+cell assignments intact; the display name and pose labels can be edited.
+Packs are selected in the workshop. Untick **Use character pack** to restore
+native Simon immediately. Older `simon_spritesheet.png` / `simon_full_frames.png`
+files are preserved but no longer loaded by this system.
+
+The renderer replaces only exactly identified body sprites, using normal scene
+priority, windows and brightness. It never writes edited pixels back to shared
+SNES tiles. Arbitrary RGB colors are supported; SNES color-math effects still
+use 5-bit channels. Alpha below 128 is transparent; fractional alpha is not
+blended. Use the new renderer. Screen-edge clipping happens after replacement,
+so jumping partly above the screen does not disable the character. Unknown
+poses or missing sprite entries fall back to native Simon rather than guessing.
+The atlas supports 256 poses;
+full-game pose coverage is not yet verified. Generated art stays local and is
+git-ignored; no ROM-derived artwork is distributed.
 
 ## ROM identity
 

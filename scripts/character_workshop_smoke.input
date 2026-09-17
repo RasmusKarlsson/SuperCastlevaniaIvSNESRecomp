@@ -1,0 +1,26 @@
+# Boot, then exercise walking, jumping, crouching, attacks and both facings.
+wait 240
+press start 2
+wait 120
+press start 2
+wait 240
+press start 2
+wait 240
+press start 2
+wait 240
+press right 90
+press b 8
+wait 35
+press y 8
+wait 40
+press left 20
+press y 8
+wait 35
+press down 20
+press down+y 8
+wait 35
+press b 8
+press y 8
+wait 50
+press right 25
+wait 20

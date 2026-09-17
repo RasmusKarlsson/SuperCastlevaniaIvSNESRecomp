@@ -1,10 +1,12 @@
 #include "runtime_settings_imgui.h"
+#include "character_pack.h"
 
 #include "recomp_runtime_ui.h"
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl3.h"
 #include <SDL3/SDL.h>
+#include <cstdlib>
 
 static bool s_initialized;
 
@@ -76,12 +78,22 @@ extern "C" void Cv4RuntimeSettingsImGuiProcessEvent(const void *event_ptr) {
 extern "C" void Cv4RuntimeSettingsImGuiRender(void *ui_ptr, int width,
                                                 int height) {
   if (!s_initialized || !ui_ptr) return;
+  if (!recomp_runtime_ui_is_open(static_cast<RecompRuntimeUi *>(ui_ptr))) return;
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   ImGui::NewFrame();
-  (void)width;
-  (void)height;
-  recomp_runtime_ui_render_imgui(static_cast<RecompRuntimeUi *>(ui_ptr));
+  static bool character_tab = std::getenv("SNESRECOMP_CHARACTER_WORKSHOP_SELFTEST") != nullptr;
+  ImGui::SetNextWindowPos({8, 0});
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6, 3));
+  ImGui::Begin("Settings tools", nullptr, ImGuiWindowFlags_NoDecoration |
+      ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+  if (ImGui::Button("Game settings")) character_tab = false;
+  ImGui::SameLine();
+  if (ImGui::Button("Character workshop")) character_tab = true;
+  ImGui::End();
+  ImGui::PopStyleVar();
+  if (character_tab) Cv4CharacterEditor();
+  else recomp_runtime_ui_render_imgui(static_cast<RecompRuntimeUi *>(ui_ptr));
   ImGui::Render();
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }

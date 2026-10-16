@@ -12,7 +12,11 @@
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+#include <condition_variable>
+#include <mutex>
+#include <optional>
 #include <set>
+#include <thread>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -108,6 +112,36 @@ Pack load(const std::string&directory){
   uint8_t*bytes=stbi_load(path(p,"body.png").string().c_str(),&w,&h,&n,4);if(!bytes)throw std::runtime_error("Cannot read body.png");
   p.pixels.resize(Width*Height);for(size_t i=0;i<p.pixels.size();++i)p.pixels[i]=uint32_t(bytes[i*4+3])<<24|uint32_t(bytes[i*4])<<16|uint32_t(bytes[i*4+1])<<8|bytes[i*4+2];stbi_image_free(bytes);stamp(p);return p;
 }
+// Encoding the 768 x 3072 template PNG takes 100+ ms, which stalled the
+// emulation thread for several frames whenever play revealed a new pose. The
+// writer saves snapshots in the background; captures made while a save is in
+// flight coalesce into the newest one. The destructor flushes on exit.
+class TemplateWriter {
+  std::mutex mutex;
+  std::condition_variable wake;
+  std::optional<Pack> pending;
+  bool stopping=false;
+  std::thread worker;
+  void run(){
+    for(;;){
+      Pack p;
+      {std::unique_lock<std::mutex> lock(mutex);wake.wait(lock,[&]{return stopping||pending.has_value();});
+       if(!pending)return;p=std::move(*pending);pending.reset();}
+      try{save(p,true);}catch(const std::exception&e){fprintf(stderr,"[characters] template save failed: %s\n",e.what());}
+    }
+  }
+public:
+  void submit(const Pack&p){
+    {std::lock_guard<std::mutex> lock(mutex);pending=p;}
+    wake.notify_one();
+    if(!worker.joinable())worker=std::thread([this]{run();});
+  }
+  ~TemplateWriter(){
+    {std::lock_guard<std::mutex> lock(mutex);stopping=true;}
+    wake.notify_one();
+    if(worker.joinable())worker.join();
+  }
+} templateWriter;
 void selectPack(const std::string&directory){active=load(directory);selectedDirectory=directory;selected=0;std::ofstream("characters/selected.txt")<<directory;status="Loaded "+active.name;}
 void initialize(){
   fs::create_directories("characters");
@@ -166,7 +200,7 @@ void captureFrame(const uint8_t*r){
   f.label="Pose "+currentId.substr(0,4)+" state "+std::to_string(word(r,0x552));
   int bx=f.cell%Columns*Cell,by=f.cell/Columns*Cell;
   for(int y=0;y<Cell;++y)std::copy_n(body.data()+y*Cell,Cell,reference.pixels.data()+(by+y)*Width+bx);
-  reference.frames.push_back(f);save(reference,true);
+  reference.frames.push_back(f);templateWriter.submit(reference);
   fprintf(stderr,"[characters] captured %s (%zu body frames)\n",f.id.c_str(),reference.frames.size());
 }
 void publish(Ppu*p,const uint8_t*r){

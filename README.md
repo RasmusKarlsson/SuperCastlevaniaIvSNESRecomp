@@ -157,6 +157,37 @@ prefer that; `.gitignore` blocks it from ever being committed either way.
 
 `tools/regen.sh` verifies the ROM, generates `src/gen/*.c`, and re-syncs
 `recomp/funcs.h`. Re-run it whenever you change anything under `recomp/`.
+It seeds analysis from the `func` declarations in `recomp/*.cfg`
+(`--cfg-roots`), exactly as the launcher's Generate & rebuild does, so both
+paths produce the same native coverage.
+
+### Native coverage and performance
+
+The frame driver runs the program through the framework's LLE interpreter and
+enters generated native code wherever a body exists. The native set is grown
+from runtime evidence:
+
+1. Run the game with `SNESRECOMP_TIER2_CAPTURE=1` over `scripts/*.input` (or
+   real play). Each run writes a `tier2_*.json` coverage profile of the
+   routines the interpreter had to execute.
+2. Copy the profiles into `recomp/profiles/` and run
+   `python tools/profile_roots.py`. It rewrites the marked `profile roots`
+   block in each `recomp/bankNN.cfg` with one `func` per clean call landing.
+3. Re-run `tools/regen.sh` and rebuild.
+
+The generator still rejects roots it cannot prove (currently 31 top-level
+dispatchers whose jump tables run into data); those keep running through LLE.
+The committed profiles take the build from 53 to 414 exact native variants.
+Emulated-CPU time per gameplay frame fell from 2.4 ms to 0.9 ms on the
+reference machine, and a 6,000-frame attract run shows the same 3,227 distinct
+frames as the interpreter-only build. The only difference is one frame of
+timing offset, because native blocks charge cycles per block rather than per
+memory access.
+
+The game holds 60 FPS during play. The host paces by emulated cycles, so the
+NMI-disabled loaders (sound-data upload to the SPC700 at boot and between
+stages) hold the current frame for ~266 ms per 16-frame step. That matches
+hardware, and every such frame is a static black or still image.
 
 ## Run
 
@@ -180,11 +211,12 @@ than mis-executing ten frames in.
 | Path | What lives there |
 |---|---|
 | `recomp/` | Analysis input: `bank*.cfg`, `symbols.toml`, generated `funcs.h` |
+| `recomp/profiles/` | Tier-2 coverage profiles that seed the native roots |
 | `rom_identity.txt` | ROM digests — read by the build, `tools/regen.sh` and CI |
 | `src/` | Host code you own: `main.c`, `game_rtl.c` |
 | `src/gen/` | Generated C. Never committed — regenerate locally |
 | `snesrecomp/` | Framework submodule (owns `lib/recomp-net`, `lib/retcomm-rbengine`) |
-| `tools/` | `regen.sh` — the ROM → C pipeline |
+| `tools/` | `regen.sh` — the ROM → C pipeline; `profile_roots.py` — profiles → cfg roots |
 | `scripts/` | `package_release.sh` — player-facing zip |
 | `framework_pins.txt` | Exact framework commits this project was scaffolded against |
 
